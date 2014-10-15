@@ -71,6 +71,25 @@ public class World
         setVisited(1, 1);
     }
     
+    @Override
+    public World clone()
+    {
+        World copy = new World(size);
+        
+        copy.size = size;
+        copy.w = w.clone();
+        copy.pX = pX;
+        copy.pY = pY;
+        copy.wumpusAlive = wumpusAlive;
+        copy.hasArrow = hasArrow;
+        copy.isInPit = isInPit;
+        copy.hasGold = hasGold;
+        copy.gameOver = gameOver;
+        copy.score = score;
+                
+        return copy;
+    }
+    
     /**
      * Returns the current score.
      * 

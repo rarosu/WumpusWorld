@@ -2,9 +2,14 @@ package qlearning;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map.Entry;
 import java.util.Random;
 import wumpusworld.*;
 
@@ -54,8 +59,26 @@ public class QLearningAgent {
             
         }
         
-        public State(FileInputStream fis) {
-            
+        public State(ObjectInputStream fis) throws IOException {
+            percepts = fis.readByte();
+            hazards = fis.readByte();
+            fis.readFully(neighbour_type, 0, neighbour_type.length);
+            fis.readFully(neighbour_hazards, 0, neighbour_hazards.length);
+            fis.readFully(n2n_type, 0, n2n_type.length);
+            fis.readFully(n2n_percepts, 0, n2n_percepts.length);
+            wumpus_alive = fis.readBoolean();
+            has_arrow = fis.readBoolean();
+        }
+        
+        public void write(ObjectOutputStream fos) throws IOException {
+            fos.writeByte(percepts);
+            fos.writeByte(hazards);
+            fos.write(neighbour_type);
+            fos.write(neighbour_hazards);
+            fos.write(n2n_type);
+            fos.write(n2n_percepts);
+            fos.writeBoolean(wumpus_alive);
+            fos.writeBoolean(has_arrow);
         }
     }
     
@@ -64,18 +87,9 @@ public class QLearningAgent {
     private HashMap<State, double[]> Q;
     
     public QLearningAgent(World world) {
-        this.w = world;
-        this.random = new Random();
-        this.Q = new HashMap<>();
-        
-        // TODO: Load Q-Values
-        File Q_file = new File(Q_FILE_PATH);
-        try {
-            FileInputStream fis = new FileInputStream(Q_file);
-        } catch (FileNotFoundException ex) {
-            // If there is no Q file, just start with an empty matrix.
-        }
-        
+        w = world;
+        random = new Random();
+        readQMatrix();
     }
     
     public void doAction() {
@@ -252,5 +266,44 @@ public class QLearningAgent {
             return REWARD_EXPLORED_TILE;
         
         return 0.0;
+    }
+
+    private void readQMatrix() {
+        Q = new HashMap<>();
+        
+        try {
+            ObjectInputStream fis = new ObjectInputStream(new FileInputStream(new File(Q_FILE_PATH)));
+
+            while (fis.available() > 0)
+            {
+                State s = new State(fis);
+                
+                double[] q_values = new double[ACTION_COUNT];
+                for (int i = 0; i < ACTION_COUNT; ++i) {
+                    q_values[i] = fis.readDouble();
+                }
+                
+                Q.put(s, q_values);
+            }
+        } catch (FileNotFoundException ex) {
+            // Just let the Q-matrix be empty.
+        } catch (IOException ex) {
+            // If we somehow failed to read the file, just clear the Q-matrix and start from scratch.
+            Q.clear();
+        }
+    }
+    
+    private void writeQMatrix() {
+        try {
+            ObjectOutputStream fos = new ObjectOutputStream(new FileOutputStream(new File(Q_FILE_PATH)));
+            for (Entry<State, double[]> entry : Q.entrySet()) {
+                entry.getKey().write(fos);
+                for (int i = 0; i < ACTION_COUNT; ++i) {
+                    fos.writeDouble(entry.getValue()[i]);
+                }
+            }
+        } catch (IOException ex) {
+            System.err.println("Failed to write Q-Matrix to " + Q_FILE_PATH);
+        }
     }
 }

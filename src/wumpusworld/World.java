@@ -77,7 +77,15 @@ public class World
         World copy = new World(size);
         
         copy.size = size;
-        copy.w = w.clone();
+        
+        for (int x = 0; x <= size; x++)
+        {
+            for (int y = 0; y <= size; y++)
+            {
+                copy.w[x][y] = "" + w[x][y];
+            }
+        }
+        
         copy.pX = pX;
         copy.pY = pY;
         copy.wumpusAlive = wumpusAlive;

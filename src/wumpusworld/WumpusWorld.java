@@ -50,6 +50,8 @@ public class WumpusWorld {
         GUI g = new GUI();
     }
     
+    private static final int COUNT = 10000;
+    
     /**
      * Starts the program in simulator mode with
      * maps read from a data file.
@@ -60,14 +62,20 @@ public class WumpusWorld {
         Vector<WorldMap> maps = mr.readMaps();
         
         double totScore = 0;
-        for (int i = 0; i < maps.size(); i++)
+        for (int k = 0; k < COUNT; k++)
         {
-            World w = maps.get(i).generateWorld();
-            totScore += (double)runSimulation(w);
+            //for (int i = 0; i < maps.size(); i++)
+            for (int i = 0; i < 1; i++)
+            {
+                World w = maps.get(i).generateWorld();
+                totScore += (double)runSimulation(w);
+            }
         }
-        totScore = totScore / (double)maps.size();
+        totScore = totScore / ((double)1 * COUNT);
         System.out.println("Average score: " + totScore);
     }
+    
+    
     
     /**
      * Starts the program in simulator mode
@@ -76,12 +84,12 @@ public class WumpusWorld {
     private void runSimulator()
     {
         double totScore = 0;
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < COUNT; i++)
         {
             WorldMap w = MapGenerator.getRandomMap(i);
             totScore += (double)runSimulation(w.generateWorld());
         }
-        totScore = totScore / (double)10;
+        totScore = totScore / (double)COUNT;
         System.out.println("Average score: " + totScore);
     }
     

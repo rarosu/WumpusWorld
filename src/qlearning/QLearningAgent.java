@@ -8,6 +8,7 @@ import java.io.ObjectOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.Random;
@@ -32,12 +33,17 @@ public class QLearningAgent {
     private static final byte HAZARD_WUMPUS = 1;
     private static final byte HAZARD_PIT = 2;
     
-    private static final double REWARD_EATEN = -1000;
-    private static final double REWARD_GOLD = 1000;
-    private static final double REWARD_PIT = -500;
-    private static final double REWARD_WUMPUS_KILLED = 100;
-    private static final double REWARD_ARROW_MISSED = -100;
-    private static final double REWARD_EXPLORED_TILE = 10;
+    private static final double REWARD_EATEN = -1.0;
+    private static final double REWARD_GOLD = 1.0;
+    private static final double REWARD_PIT = -0.5;
+    private static final double REWARD_WUMPUS_KILLED = 0.1;
+    private static final double REWARD_ARROW_MISSED = -0.1;
+    private static final double REWARD_EXPLORED_TILE = 0.2;
+    private static final double REWARD_BUMPING_INTO_WALL = -0.1;
+    private static final double REWARD_FIRING_WITHOUT_AMMO = -0.1;
+    private static final double REWARD_TURNING = -0.01;
+    
+    private static final double OPTIMAL_CHANCE = 0.99;
     
     private static final int[][] NEIGHBOUR_COORDINATES = { {1, 0}, {0, 1}, {-1, 0}, {0, -1} };
     private static final int[][] N2N_COORDINATES = { {2, 0}, {1, 1}, {0, 2}, {-1, 1}, {-2, 0}, {-1, -1}, {0, -2}, {1, -1} };
@@ -46,6 +52,7 @@ public class QLearningAgent {
     private static final double GAMMA = 0.5;
     
     private class State {
+        public byte direction;
         public byte percepts;
         public byte hazards;
         public byte[] neighbour_type = new byte[4];
@@ -60,6 +67,7 @@ public class QLearningAgent {
         }
         
         public State(ObjectInputStream fis) throws IOException {
+            direction = fis.readByte();
             percepts = fis.readByte();
             hazards = fis.readByte();
             fis.readFully(neighbour_type, 0, neighbour_type.length);
@@ -71,6 +79,7 @@ public class QLearningAgent {
         }
         
         public void write(ObjectOutputStream fos) throws IOException {
+            fos.writeByte(direction);
             fos.writeByte(percepts);
             fos.writeByte(hazards);
             fos.write(neighbour_type);
@@ -79,6 +88,65 @@ public class QLearningAgent {
             fos.write(n2n_percepts);
             fos.writeBoolean(wumpus_alive);
             fos.writeBoolean(has_arrow);
+        }
+        
+        @Override
+        public String toString() {
+            return Integer.toString(hashCode());
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 3;
+            hash = 59 * hash + this.direction;
+            hash = 59 * hash + this.percepts;
+            hash = 59 * hash + this.hazards;
+            hash = 59 * hash + Arrays.hashCode(this.neighbour_type);
+            hash = 59 * hash + Arrays.hashCode(this.neighbour_hazards);
+            hash = 59 * hash + Arrays.hashCode(this.n2n_type);
+            hash = 59 * hash + Arrays.hashCode(this.n2n_percepts);
+            hash = 59 * hash + (this.wumpus_alive ? 1 : 0);
+            hash = 59 * hash + (this.has_arrow ? 1 : 0);
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final State other = (State) obj;
+            if (this.direction != other.direction) {
+                return false;
+            }
+            if (this.percepts != other.percepts) {
+                return false;
+            }
+            if (this.hazards != other.hazards) {
+                return false;
+            }
+            if (!Arrays.equals(this.neighbour_type, other.neighbour_type)) {
+                return false;
+            }
+            if (!Arrays.equals(this.neighbour_hazards, other.neighbour_hazards)) {
+                return false;
+            }
+            if (!Arrays.equals(this.n2n_type, other.n2n_type)) {
+                return false;
+            }
+            if (!Arrays.equals(this.n2n_percepts, other.n2n_percepts)) {
+                return false;
+            }
+            if (this.wumpus_alive != other.wumpus_alive) {
+                return false;
+            }
+            if (this.has_arrow != other.has_arrow) {
+                return false;
+            }
+            return true;
         }
     }
     
@@ -95,6 +163,13 @@ public class QLearningAgent {
     public void doAction() {
         int x1 = w.getPlayerX();
         int y1 = w.getPlayerY();
+        
+        
+        // Do not run the agent if the game has ended.
+        if (w.gameOver())
+        {
+            return;
+        }
         
         // Immediately grab gold on the first turn.
         if (w.hasGlitter(x1, y1)) {
@@ -136,10 +211,13 @@ public class QLearningAgent {
 
         // Given the new state after making the action, find out if we are rewarded in the new state.
         State s2 = createState(x2, y2);
-        double r = getReward(previous_world);
+        double r = getReward(previous_world, a1);
+        
+        System.out.println(getActionString(a1) + " (" + getQValuesString(q_values_1, a1) + ") " + r);
         
         double[] q_values_2;
         if (Q.containsKey(s2)) {
+            //System.out.println("Found existing state in Q-matrix");
             q_values_2 = Q.get(s2);
         } else {
             q_values_2 = new double[ACTION_COUNT];
@@ -152,12 +230,20 @@ public class QLearningAgent {
             max = Math.max(max, q_values_2[a2]);
         q_values_1[a1] = q_values_1[a1] + ALPHA * (r + GAMMA * max - q_values_1[a1]);
         
-        System.out.println("New Q-Value = " + q_values_1[a1]);
+        // If the game has ended, write the Q matrix to file.
+        if (w.gameOver())
+        {
+            writeQMatrix();
+            System.out.println("-- Episode ended --");
+        }
+        
+        //System.out.println("New Q-Value = " + q_values_1[a1]);
     }
     
     private State createState(int x, int y) {
         State s = new State();
 
+        s.direction = (byte) w.getDirection();
         if (w.hasBreeze(x, y))
             s.percepts |= PERCEPT_BREEZY;
         if (w.hasStench(x, y))
@@ -221,6 +307,7 @@ public class QLearningAgent {
     
     private int getBestAction(double[] qValues) {
         ArrayList<Integer> best = new ArrayList<>();
+        ArrayList<Integer> not_best = new ArrayList<>();
         
         double max = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < qValues.length; ++i) {
@@ -230,12 +317,15 @@ public class QLearningAgent {
         for (int i = 0; i < qValues.length; ++i) {
             if (qValues[i] == max) {
                 best.add(i);
+            } else {
+                not_best.add(i);
             }
         }
         
-        // TODO: Sometimes randomize for non-optimal actions.
-        
-        return best.get(random.nextInt(best.size()));
+        if (random.nextDouble() <= OPTIMAL_CHANCE || not_best.isEmpty()) 
+            return best.get(random.nextInt(best.size()));
+        else
+            return not_best.get(random.nextInt(not_best.size()));
     }
     
     private String getActionString(int action) {
@@ -248,12 +338,19 @@ public class QLearningAgent {
         }
     }
     
-    private double getReward(World previous) {
+    private double getReward(World previous, int action) {
+        if (action == ACTION_TURN_LEFT || action == ACTION_TURN_RIGHT)
+            return REWARD_TURNING;
+        if (action == ACTION_MOVE && w.getPlayerX() == previous.getPlayerX() && w.getPlayerY() == previous.getPlayerY())
+            return REWARD_BUMPING_INTO_WALL;
+        if (action == ACTION_SHOOT && !previous.hasArrow())
+            return REWARD_FIRING_WITHOUT_AMMO;
+        
         if (w.hasWumpus(w.getPlayerX(), w.getPlayerY()))
             return REWARD_EATEN;
         if (w.hasGold())
             return REWARD_GOLD;
-        if (w.hasPit(w.getPlayerX(), w.getPlayerY()))
+        if (w.hasPit(w.getPlayerX(), w.getPlayerY()) && !previous.hasPit(previous.getPlayerX(), previous.getPlayerY()))
             return REWARD_PIT;
         if (!w.hasArrow() && previous.hasArrow()) {
             if (!w.wumpusAlive())
@@ -271,18 +368,15 @@ public class QLearningAgent {
     private void readQMatrix() {
         Q = new HashMap<>();
         
-        try {
-            ObjectInputStream fis = new ObjectInputStream(new FileInputStream(new File(Q_FILE_PATH)));
-
-            while (fis.available() > 0)
-            {
+        try (ObjectInputStream fis = new ObjectInputStream(new FileInputStream(new File(Q_FILE_PATH)))) {
+            while (fis.available() > 0) {
                 State s = new State(fis);
-                
+
                 double[] q_values = new double[ACTION_COUNT];
                 for (int i = 0; i < ACTION_COUNT; ++i) {
                     q_values[i] = fis.readDouble();
                 }
-                
+
                 Q.put(s, q_values);
             }
         } catch (FileNotFoundException ex) {
@@ -294,8 +388,7 @@ public class QLearningAgent {
     }
     
     private void writeQMatrix() {
-        try {
-            ObjectOutputStream fos = new ObjectOutputStream(new FileOutputStream(new File(Q_FILE_PATH)));
+        try (ObjectOutputStream fos = new ObjectOutputStream(new FileOutputStream(new File(Q_FILE_PATH), false))) {
             for (Entry<State, double[]> entry : Q.entrySet()) {
                 entry.getKey().write(fos);
                 for (int i = 0; i < ACTION_COUNT; ++i) {
@@ -305,5 +398,22 @@ public class QLearningAgent {
         } catch (IOException ex) {
             System.err.println("Failed to write Q-Matrix to " + Q_FILE_PATH);
         }
+    }
+    
+    private String getQValuesString(double[] q_values, int selected_action) {
+        StringBuilder sb = new StringBuilder();
+        
+        for (int a = 0; a < q_values.length; ++a) {
+            if (a == selected_action) {
+                sb.append("[").append(getActionString(a)).append(":").append(q_values[a]).append("]");
+            } else {
+                sb.append(getActionString(a)).append(":").append(q_values[a]);
+            }
+            
+            if (a != q_values.length - 1)
+                sb.append(", ");
+        }
+        
+        return sb.toString();
     }
 }

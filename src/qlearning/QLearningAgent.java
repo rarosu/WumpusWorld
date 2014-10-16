@@ -3,16 +3,14 @@ package qlearning;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import wumpusworld.*;
 
-public class QLearningAgent {    
+public class QLearningAgent {
+    private static final String Q_FILE_PATH = "Q.dat";
+    
     private static final int ACTION_MOVE = 0;
     private static final int ACTION_SHOOT = 1;
     private static final int ACTION_TURN_LEFT = 2;
@@ -36,16 +34,13 @@ public class QLearningAgent {
     private static final double REWARD_ARROW_MISSED = -100;
     private static final double REWARD_EXPLORED_TILE = 10;
     
-    private static final int[] neighbour_coordinates_x = { 1, 0, -1, 0 };
-    private static final int[] neighbour_coordinates_y = { 0, 1, 0, -1 };
-    private static final int[] n2n_coordinates_x = { 2, 1, 0, -1, -2, -1, 0, 1 };
-    private static final int[] n2n_coordinates_y = { 0, 1, 2, 1, 0, -1, -2, -1 };
+    private static final int[][] NEIGHBOUR_COORDINATES = { {1, 0}, {0, 1}, {-1, 0}, {0, -1} };
+    private static final int[][] N2N_COORDINATES = { {2, 0}, {1, 1}, {0, 2}, {-1, 1}, {-2, 0}, {-1, -1}, {0, -2}, {1, -1} };
     
     private static final double ALPHA = 0.1;
     private static final double GAMMA = 0.5;
     
-    private class State
-    {
+    private class State {
         public byte percepts;
         public byte hazards;
         public byte[] neighbour_type = new byte[4];
@@ -55,13 +50,11 @@ public class QLearningAgent {
         public boolean wumpus_alive;
         public boolean has_arrow;
         
-        public State()
-        {
+        public State() {
             
         }
         
-        public State(FileInputStream fis)
-        {
+        public State(FileInputStream fis) {
             
         }
     }
@@ -76,79 +69,76 @@ public class QLearningAgent {
         this.Q = new HashMap<>();
         
         // TODO: Load Q-Values
-        File Q_file = new File("Q.dat");
+        File Q_file = new File(Q_FILE_PATH);
         try {
             FileInputStream fis = new FileInputStream(Q_file);
         } catch (FileNotFoundException ex) {
-            Logger.getLogger(QLearningAgent.class.getName()).log(Level.SEVERE, null, ex);
+            // If there is no Q file, just start with an empty matrix.
         }
         
     }
     
     public void doAction() {
-        int x = w.getPlayerX();
-        int y = w.getPlayerY();
+        int x1 = w.getPlayerX();
+        int y1 = w.getPlayerY();
         
         // Immediately grab gold on the first turn.
-        if (w.hasGlitter(x, y))
-        {
+        if (w.hasGlitter(x1, y1)) {
             w.doAction(World.A_GRAB);
             return;
         }
         
         // Immediately climb out of the pit.
-        if (w.hasPit(x, y))
-        {
+        if (w.hasPit(x1, y1)) {
             w.doAction(World.A_CLIMB);
         }
         
-        // Do the best action for our current state.
+        // Find the best action to do in our current state.
         World previous_world = w.clone();
-        State s = createState(x, y);
+        State s1 = createState(x1, y1);
 
-        double[] qValues;
-        if (Q.containsKey(s)) {
-            qValues = Q.get(s);
+        double[] q_values_1;
+        if (Q.containsKey(s1)) {
+            q_values_1 = Q.get(s1);
         } else {
-            qValues = new double[ACTION_COUNT];
-            Q.put(s, qValues);
+            q_values_1 = new double[ACTION_COUNT];
+            Q.put(s1, q_values_1);
         }
 
-        int a = getBestAction(qValues);
+        int a1 = getBestAction(q_values_1);
 
-        w.doAction(getActionString(a));
+        // Do the selected action.
+        w.doAction(getActionString(a1));
         
-        // Grab the gold if we've encountered it, climb out of pits if we're in them and there is no gold there.
-        if (w.hasGlitter(x, y))
-        {
-            w.doAction(World.A_GRAB);
-        }
-        else if (w.hasPit(x, y))
-        {
-            w.doAction(World.A_CLIMB);
-        }
-
-        // Do the reinforcement depending on the new state.
         int x2 = w.getPlayerX();
         int y2 = w.getPlayerY();
+        
+        // Grab the gold if we've encountered it, climb out of pits if we're in them and there is no gold there.
+        if (w.hasGlitter(x2, y2)) {
+            w.doAction(World.A_GRAB);
+        } else if (w.hasPit(x2, y2)) {
+            w.doAction(World.A_CLIMB);
+        }
+
+        // Given the new state after making the action, find out if we are rewarded in the new state.
         State s2 = createState(x2, y2);
         double r = getReward(previous_world);
         
-        double[] newQValues;
-        if (Q.containsKey(s)) {
-            newQValues = Q.get(s);
+        double[] q_values_2;
+        if (Q.containsKey(s2)) {
+            q_values_2 = Q.get(s2);
         } else {
-            newQValues = new double[ACTION_COUNT];
-            Q.put(s, qValues);
+            q_values_2 = new double[ACTION_COUNT];
+            Q.put(s2, q_values_2);
         }
         
         // Calculate the new Q-value for the taken action.
         double max = Double.NEGATIVE_INFINITY;
-        for (int i = 0; i < newQValues.length; ++i)
-            max = Math.max(max, newQValues[i]);
-        qValues[a] = qValues[a] + ALPHA * (r + GAMMA * max - qValues[a]);
+        for (int a2 = 0; a2 < q_values_2.length; ++a2)
+            max = Math.max(max, q_values_2[a2]);
+        q_values_1[a1] = q_values_1[a1] + ALPHA * (r + GAMMA * max - q_values_1[a1]);
         
-        System.out.println("New Q-Value = " + qValues[a]);
+        System.out.println("New Q-Value = " + q_values_1[a1]);
     }
     
     private State createState(int x, int y) {
@@ -167,60 +157,46 @@ public class QLearningAgent {
             s.hazards |= HAZARD_WUMPUS;
         
         // Check type and hazards of neighbours.
-        for (int i = 0; i < 4; ++i)
-        {
-            int nx = x + neighbour_coordinates_x[i];
-            int ny = y + neighbour_coordinates_y[i];
+        for (int i = 0; i < 4; ++i) {
+            int nx = x + NEIGHBOUR_COORDINATES[i][0];
+            int ny = y + NEIGHBOUR_COORDINATES[i][1];
             
-            if (w.isValidPosition(nx, ny))
-            {
-                if (w.isUnknown(nx, ny))
-                {
-                    s.neighbour_type[i] = TYPE_UNKNOWN;
-                    s.neighbour_hazards[i] = 0;
-                }
-                else
-                {
+            if (w.isValidPosition(nx, ny)) {
+                if (!w.isUnknown(nx, ny)) {
                     s.neighbour_type[i] = TYPE_NORMAL;
                     
                     if (w.hasPit(nx, ny))
                         s.neighbour_hazards[i] |= HAZARD_PIT;
                     if (w.hasWumpus(nx, ny))
                         s.neighbour_hazards[i] |= HAZARD_WUMPUS;
+                } else {
+                    s.neighbour_type[i] = TYPE_UNKNOWN;
+                    s.neighbour_hazards[i] = 0;
                 }
-            }
-            else
-            {
+            } else {
                 s.neighbour_type[i] = TYPE_WALL;
                 s.neighbour_hazards[i] = 0;
             }
         }
         
         // Check percepts in our neighbours' neighbours.
-        for (int i = 0; i < 8; ++i)
-        {
-            int nx = x + n2n_coordinates_x[i];
-            int ny = y + n2n_coordinates_y[i];
+        for (int i = 0; i < 8; ++i) {
+            int nx = x + N2N_COORDINATES[i][0];
+            int ny = y + N2N_COORDINATES[i][1];
             
-            if (w.isValidPosition(nx, ny))
-            {
-                if (w.isUnknown(nx, ny))
-                {
-                    s.n2n_type[i] = TYPE_UNKNOWN;
-                    s.n2n_percepts[i] = 0;
-                }
-                else
-                {
+            if (w.isValidPosition(nx, ny)) {
+                if (!w.isUnknown(nx, ny)) {
                     s.n2n_type[i] = TYPE_NORMAL;
                     
                     if (w.hasBreeze(nx, ny))
                         s.n2n_percepts[i] |= PERCEPT_BREEZY;
                     if (w.hasStench(nx, ny))
                         s.n2n_percepts[i] |= PERCEPT_STENCH;
+                } else {
+                    s.n2n_type[i] = TYPE_UNKNOWN;
+                    s.n2n_percepts[i] = 0;
                 }
-            }
-            else
-            {
+            } else {
                 s.n2n_type[i] = TYPE_WALL;
                 s.n2n_percepts[i] = 0;
             }
@@ -233,15 +209,12 @@ public class QLearningAgent {
         ArrayList<Integer> best = new ArrayList<>();
         
         double max = Double.NEGATIVE_INFINITY;
-        for (int i = 0; i < qValues.length; ++i)
-        {
+        for (int i = 0; i < qValues.length; ++i) {
             max = Math.max(max, qValues[i]);
         }
         
-        for (int i = 0; i < qValues.length; ++i)
-        {
-            if (qValues[i] == max)
-            {
+        for (int i = 0; i < qValues.length; ++i) {
+            if (qValues[i] == max) {
                 best.add(i);
             }
         }
@@ -252,8 +225,7 @@ public class QLearningAgent {
     }
     
     private String getActionString(int action) {
-        switch (action)
-        {
+        switch (action) {
             case ACTION_MOVE: return World.A_MOVE;
             case ACTION_SHOOT: return World.A_SHOOT;
             case ACTION_TURN_LEFT: return World.A_TURN_LEFT;
@@ -269,8 +241,7 @@ public class QLearningAgent {
             return REWARD_GOLD;
         if (w.hasPit(w.getPlayerX(), w.getPlayerY()))
             return REWARD_PIT;
-        if (!w.hasArrow() && previous.hasArrow())
-        {
+        if (!w.hasArrow() && previous.hasArrow()) {
             if (!w.wumpusAlive())
                 return REWARD_WUMPUS_KILLED;
             else

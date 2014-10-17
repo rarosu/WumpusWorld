@@ -223,7 +223,7 @@ public class QLearningAgent {
         State s2 = createState(x2, y2);
         double r = getReward(previous_world, a1);
         
-        System.out.println(getActionString(a1) + " (" + getQValuesString(q_values_1, a1) + ") " + r);
+        //System.out.println(getActionString(a1) + " (" + getQValuesString(q_values_1, a1) + ") " + r);
         
         double[] q_values_2;
         if (Q.containsKey(s2)) {
@@ -245,7 +245,7 @@ public class QLearningAgent {
         {
             if (writeQOnGameEnd)
                 writeQMatrix(Q);
-            System.out.println("-- Episode ended --");
+            //System.out.println("-- Episode ended --");
         }
         
         //System.out.println("New Q-Value = " + q_values_1[a1]);

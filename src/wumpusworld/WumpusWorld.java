@@ -52,7 +52,8 @@ public class WumpusWorld {
         GUI g = new GUI();
     }
     
-    private static final int COUNT = 10000;
+    private static final int COUNT = 100000;
+    private static final int ACTION_LIMIT = 1000;
     
     /**
      * Starts the program in simulator mode with
@@ -72,7 +73,7 @@ public class WumpusWorld {
             for (int i = 0; i < maps.size(); i++)
             {
                 World w = maps.get(i).generateWorld();
-                totScore += (double)runSimulation(w, Q);
+                totScore += (double)runSimulation(k * maps.size() + i, w, Q);
             }
         }
         totScore = totScore / ((double)maps.size() * C);
@@ -95,7 +96,7 @@ public class WumpusWorld {
         for (int i = 0; i < COUNT; i++)
         {
             WorldMap w = MapGenerator.getRandomMap(i);
-            totScore += (double)runSimulation(w.generateWorld(), Q);
+            totScore += (double)runSimulation(i, w.generateWorld(), Q);
         }
         totScore = totScore / (double)COUNT;
         System.out.println("Average score: " + totScore);
@@ -110,7 +111,7 @@ public class WumpusWorld {
      * @param w Wumpus World
      * @return Achieved score
      */
-    private int runSimulation(World w, HashMap<QLearningAgent.State, double[]> Q)
+    private int runSimulation(int index, World w, HashMap<QLearningAgent.State, double[]> Q)
     {
         int actions = 0;
         Agent a = new MyAgent(w, Q);
@@ -118,9 +119,11 @@ public class WumpusWorld {
         {
             a.doAction();
             actions++;
+            if (actions > ACTION_LIMIT)
+                break;
         }
         int score = w.getScore();
-        System.out.println("Simulation ended after " + actions + " actions. Score " + score);
+        System.out.println("Simulation " + index + " ended after " + actions + " actions. Score " + score);
         return score;
     }
 }

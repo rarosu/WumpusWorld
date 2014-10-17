@@ -51,7 +51,7 @@ public class QLearningAgent {
     private static final double ALPHA = 0.1;
     private static final double GAMMA = 0.5;
     
-    private class State {
+    public static class State {
         public byte direction;
         public byte percepts;
         public byte hazards;
@@ -153,12 +153,22 @@ public class QLearningAgent {
     private World w;
     private Random random;
     private HashMap<State, double[]> Q;
+    private boolean writeQOnGameEnd;
     
     public QLearningAgent(World world) {
         w = world;
         random = new Random();
-        readQMatrix();
+        Q = readQMatrix();
+        writeQOnGameEnd = true;
     }
+    
+    public QLearningAgent(World world, HashMap<State, double[]> Q) {
+        w = world;
+        random = new Random();
+        this.Q = Q;
+        writeQOnGameEnd = false;
+    }
+    
     
     public void doAction() {
         int x1 = w.getPlayerX();
@@ -233,7 +243,8 @@ public class QLearningAgent {
         // If the game has ended, write the Q matrix to file.
         if (w.gameOver())
         {
-            writeQMatrix();
+            if (writeQOnGameEnd)
+                writeQMatrix(Q);
             System.out.println("-- Episode ended --");
         }
         
@@ -365,8 +376,8 @@ public class QLearningAgent {
         return 0.0;
     }
 
-    private void readQMatrix() {
-        Q = new HashMap<>();
+    public static HashMap<State, double[]> readQMatrix() {
+        HashMap<State, double[]> Q = new HashMap<>();
         
         try (ObjectInputStream fis = new ObjectInputStream(new FileInputStream(new File(Q_FILE_PATH)))) {
             while (fis.available() > 0) {
@@ -385,9 +396,11 @@ public class QLearningAgent {
             // If we somehow failed to read the file, just clear the Q-matrix and start from scratch.
             Q.clear();
         }
+        
+        return Q;
     }
     
-    private void writeQMatrix() {
+    public static void writeQMatrix(HashMap<State, double[]> Q) {
         try (ObjectOutputStream fos = new ObjectOutputStream(new FileOutputStream(new File(Q_FILE_PATH), false))) {
             for (Entry<State, double[]> entry : Q.entrySet()) {
                 entry.getKey().write(fos);

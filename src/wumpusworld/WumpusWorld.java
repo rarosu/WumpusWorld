@@ -1,6 +1,8 @@
 package wumpusworld;
 
+import java.util.HashMap;
 import java.util.Vector;
+import qlearning.QLearningAgent;
 /**
  * Starting class for the Wumpus World program. The program
  * has three options: 1) Run a GUI where the Wumpus World can be
@@ -58,21 +60,25 @@ public class WumpusWorld {
      */
     private void runSimulatorDB()
     {
+        HashMap<QLearningAgent.State, double[]> Q = QLearningAgent.readQMatrix();
+        
         MapReader mr = new MapReader();
         Vector<WorldMap> maps = mr.readMaps();
+        final int C = COUNT / maps.size();
         
         double totScore = 0;
-        for (int k = 0; k < COUNT; k++)
+        for (int k = 0; k < C; k++)
         {
-            //for (int i = 0; i < maps.size(); i++)
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < maps.size(); i++)
             {
                 World w = maps.get(i).generateWorld();
-                totScore += (double)runSimulation(w);
+                totScore += (double)runSimulation(w, Q);
             }
         }
-        totScore = totScore / ((double)1 * COUNT);
+        totScore = totScore / ((double)maps.size() * C);
         System.out.println("Average score: " + totScore);
+        
+        QLearningAgent.writeQMatrix(Q);
     }
     
     
@@ -83,14 +89,18 @@ public class WumpusWorld {
      */
     private void runSimulator()
     {
+        HashMap<QLearningAgent.State, double[]> Q = QLearningAgent.readQMatrix();
+        
         double totScore = 0;
         for (int i = 0; i < COUNT; i++)
         {
             WorldMap w = MapGenerator.getRandomMap(i);
-            totScore += (double)runSimulation(w.generateWorld());
+            totScore += (double)runSimulation(w.generateWorld(), Q);
         }
         totScore = totScore / (double)COUNT;
         System.out.println("Average score: " + totScore);
+        
+        QLearningAgent.writeQMatrix(Q);
     }
     
     /**
@@ -100,10 +110,10 @@ public class WumpusWorld {
      * @param w Wumpus World
      * @return Achieved score
      */
-    private int runSimulation(World w)
+    private int runSimulation(World w, HashMap<QLearningAgent.State, double[]> Q)
     {
         int actions = 0;
-        Agent a = new MyAgent(w);
+        Agent a = new MyAgent(w, Q);
         while (!w.gameOver())
         {
             a.doAction();

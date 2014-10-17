@@ -1,6 +1,7 @@
 package wumpusworld;
 
 import qlearning.*;
+import java.util.HashMap;
 
 /**
  * Contans starting code for creating your own Wumpus World agent.
@@ -22,6 +23,11 @@ public class MyAgent implements Agent
     {
         w = world;
         agent = new QLearningAgent(w);
+    }
+    
+    public MyAgent(World world, HashMap<QLearningAgent.State, double[]> Q) {
+        w = world;
+        agent = new QLearningAgent(w, Q);
     }
     
     /**
